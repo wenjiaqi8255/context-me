@@ -6,7 +6,8 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "identity"
   ],
   "host_permissions": [
     "http://localhost:*/*",
@@ -39,6 +40,10 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "oauth2": {
+    "client_id": "661659978730-dc7s5fdavvtc7s5sc183gkeepauui606.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
   },
   "web_accessible_resources": [
     {

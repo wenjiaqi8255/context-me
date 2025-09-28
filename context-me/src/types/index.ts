@@ -48,12 +48,27 @@ export interface Insight {
 export interface User {
   id: string
   email: string
+  name?: string
+  avatar?: string
+  googleId?: string
+  isActive: boolean
   stripeCustomerId?: string
   subscriptionStatus: 'free' | 'active' | 'cancelled' | 'past_due'
   subscriptionTier: 'basic' | 'pro' | 'enterprise'
   trialEndsAt?: Date
+  lastLoginAt?: Date
   createdAt: Date
   updatedAt: Date
+}
+
+export interface Session {
+  user: {
+    id: string
+    email: string
+    name?: string
+    avatar?: string
+  }
+  accessToken?: string
 }
 
 export interface UsageLog {

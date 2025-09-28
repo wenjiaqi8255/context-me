@@ -33,34 +33,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId, profileData } = body
+    const user = await requireAuth()
+    const { profileData } = await request.json()
 
-    if (!userId || !profileData) {
+    if (!profileData) {
       return NextResponse.json<ApiResponse>({
         success: false,
-        error: 'User ID and profile data are required'
+        error: 'Profile data is required'
       }, { status: 400 })
     }
 
-    // 确保用户存在
-    let user = await prisma.user.findUnique({
-      where: { id: userId }
-    })
-
-    if (!user) {
-      // 创建新用户
-      user = await prisma.user.create({
-        data: {
-          id: userId,
-          email: `${userId}@temp.local` // 临时邮箱
-        }
-      })
-      }
-
     // 获取最新版本号
     const latestProfile = await prisma.userProfile.findFirst({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: { version: 'desc' },
       select: { version: true }
     })
@@ -70,7 +55,7 @@ export async function POST(request: NextRequest) {
     // 创建新版本档案
     const newProfile = await prisma.userProfile.create({
       data: {
-        userId,
+        userId: user.id,
         profileData,
         version: newVersion
       }
@@ -81,30 +66,36 @@ export async function POST(request: NextRequest) {
       data: newProfile,
       message: 'Profile created successfully'
     })
-    } catch (error) {
-      console.error('Create profile error:', error)
+  } catch (error) {
+    console.error('Create profile error:', error)
+    if (error instanceof Error && error.message === 'Authentication required') {
       return NextResponse.json<ApiResponse>({
         success: false,
-        error: `Failed to create profile: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }, { status: 500 })
+        error: 'Authentication required'
+      }, { status: 401 })
     }
+    return NextResponse.json<ApiResponse>({
+      success: false,
+      error: `Failed to create profile: ${error instanceof Error ? error.message : 'Unknown error'}`
+    }, { status: 500 })
+  }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId, profileData, currentVersion } = body
+    const user = await requireAuth()
+    const { profileData, currentVersion } = await request.json()
 
-    if (!userId || !profileData) {
+    if (!profileData) {
       return NextResponse.json<ApiResponse>({
         success: false,
-        error: 'User ID and profile data are required'
+        error: 'Profile data is required'
       }, { status: 400 })
     }
 
     // 检查版本冲突
     const latestProfile = await prisma.userProfile.findFirst({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: { version: 'desc' }
     })
 
@@ -120,7 +111,7 @@ export async function PUT(request: NextRequest) {
     // 创建新版本
     const updatedProfile = await prisma.userProfile.create({
       data: {
-        userId,
+        userId: user.id,
         profileData,
         version: newVersion
       }
@@ -133,6 +124,12 @@ export async function PUT(request: NextRequest) {
     })
   } catch (error) {
     console.error('Update profile error:', error)
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 })
+    }
     return NextResponse.json<ApiResponse>({
       success: false,
       error: 'Failed to update profile'

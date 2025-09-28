@@ -1,9 +1,12 @@
 // ContextMe Background Service Worker
 class ContextMeBackground {
   constructor() {
-    this.apiPort = 3000 // 默认端口，可以通过配置修改
+    this.apiPort = 3001 // 默认端口，可以通过配置修改
     this.apiBase = `http://localhost:${this.apiPort}/api`
-    this.loadSavedPort().then(() => this.initialize())
+    this.aiEnabled = false // AI功能默认关闭
+    this.mockAIEnabled = false // Mock AI功能默认关闭
+    console.log('🚀 [ContextMe Background] Initializing background service...')
+    this.loadSavedPort().then(() => this.loadAIStatus().then(() => this.loadMockAIStatus().then(() => this.initialize())))
   }
 
   async initialize() {
@@ -20,7 +23,15 @@ class ContextMeBackground {
   async handleMessage(message, sender, sendResponse) {
     const { type, data } = message
 
-    console.log('Background received message:', { type, data })
+    console.log('📥 [ContextMe Background] Received message:', { type, data })
+    console.log('📥 [ContextMe Background] Message from:', sender)
+    console.log('📥 [ContextMe Background] Current AI status:', this.aiEnabled)
+    console.log('📥 [ContextMe Background] Current API port:', this.apiPort)
+
+    // 特殊日志用于Mock AI消息
+    if (type === 'SET_MOCK_AI_STATUS') {
+      console.log('🎭 [ContextMe Background] Received Mock AI status message:', data)
+    }
 
     try {
       switch (type) {
@@ -52,8 +63,24 @@ class ContextMeBackground {
 
         case 'SAVE_USER_PROFILE':
           await this.saveLocalProfile(data.profileData)
-          await this.syncProfileToCloud({ userId: data.userId, profileData: data.profileData })
-          sendResponse({ success: true, data: { userId: data.userId, profileData: data.profileData } })
+          await this.syncProfileToCloud(data.profileData)
+          sendResponse({ success: true, data: { profileData: data.profileData } })
+          break
+
+        case 'EXTENSION_LOGIN':
+          await this.handleExtensionLogin(data)
+          sendResponse({ success: true })
+          break
+
+        case 'EXTENSION_LOGOUT':
+          await this.handleExtensionLogout()
+          sendResponse({ success: true })
+          break
+
+        case 'CHECK_AUTH_STATUS':
+          const authToken = await this.getAuthToken()
+          const isAuthenticated = !!authToken
+          sendResponse({ success: true, data: { isAuthenticated } })
           break
 
         case 'GET_USAGE_STATS':
@@ -71,6 +98,28 @@ class ContextMeBackground {
 
         case 'GET_API_PORT':
           sendResponse({ success: true, data: { port: this.apiPort, apiBase: this.apiBase } })
+          break
+
+        case 'GET_AI_STATUS':
+          sendResponse({ success: true, data: { enabled: this.aiEnabled } })
+          break
+
+        case 'SET_AI_STATUS':
+          this.aiEnabled = data.enabled
+          await this.saveAIStatus(data.enabled)
+          console.log('🤖 [ContextMe Background] AI status set to:', data.enabled)
+          sendResponse({ success: true, data: { enabled: this.aiEnabled } })
+          break
+
+        case 'SET_MOCK_AI_STATUS':
+          this.mockAIEnabled = data.enabled
+          await this.saveMockAIStatus(data.enabled)
+          console.log('🎭 [ContextMe Background] Mock AI status set to:', data.enabled)
+          sendResponse({ success: true, data: { enabled: this.mockAIEnabled } })
+          break
+
+        case 'GET_MOCK_AI_STATUS':
+          sendResponse({ success: true, data: { enabled: this.mockAIEnabled } })
           break
 
         default:
@@ -190,16 +239,29 @@ class ContextMeBackground {
   }
 
   async getLocalProfile() {
+    console.log('👤 [ContextMe Background] Getting local user profile...')
     return new Promise((resolve) => {
-      chrome.storage.local.get(['userProfile'], (result) => {
-        resolve(result.userProfile || null)
+      chrome.storage.local.get(['userProfile', 'authToken'], (result) => {
+        if (result.authToken) {
+          console.log('🔐 [ContextMe Background] Auth token found, fetching from cloud...')
+          this.fetchProfileFromCloud(result.authToken).then(resolve).catch(() => {
+            console.log('📥 [ContextMe Background] Fallback to local profile:', result.userProfile ? 'exists' : 'not found')
+            resolve(result.userProfile || null)
+          })
+        } else {
+          console.log('📥 [ContextMe Background] No auth token, using local profile:', result.userProfile ? 'exists' : 'not found')
+          resolve(result.userProfile || null)
+        }
       })
     })
   }
 
   async saveLocalProfile(profile) {
+    console.log('💾 [ContextMe Background] Saving local user profile...')
+    console.log('📝 [ContextMe Background] Profile data to save:', profile)
     return new Promise((resolve) => {
       chrome.storage.local.set({ userProfile: profile }, () => {
+        console.log('✅ [ContextMe Background] Local profile saved successfully')
         resolve()
       })
     })
@@ -207,22 +269,84 @@ class ContextMeBackground {
 
   async syncProfileToCloud(profileData) {
     try {
-      const userId = await this.getCurrentUserId()
-      await this.saveProfile({
-        userId,
-        profileData
-      })
+      const authToken = await this.getAuthToken()
+      if (authToken) {
+        await this.saveProfileToCloud(authToken, profileData)
+      }
     } catch (error) {
       console.error('Failed to sync profile to cloud:', error)
     }
   }
 
-  async getCurrentUserId() {
+  async getAuthToken() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['userId'], (result) => {
-        resolve(result.userId || null)
+      chrome.storage.local.get(['authToken'], (result) => {
+        resolve(result.authToken || null)
       })
     })
+  }
+
+  async saveAuthToken(token) {
+    console.log('🔐 [ContextMe Background] Saving auth token...')
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ authToken: token }, () => {
+        console.log('✅ [ContextMe Background] Auth token saved successfully')
+        resolve()
+      })
+    })
+  }
+
+  async fetchProfileFromCloud(authToken) {
+    try {
+      const response = await fetch(`${this.apiBase}/extension/profile`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.success) {
+        console.log('✅ [ContextMe Background] Profile fetched from cloud:', result.data)
+        return result.data
+      } else {
+        throw new Error(result.error || 'Failed to fetch profile')
+      }
+    } catch (error) {
+      console.error('❌ [ContextMe Background] Failed to fetch profile from cloud:', error)
+      throw error
+    }
+  }
+
+  async saveProfileToCloud(authToken, profileData) {
+    try {
+      const response = await fetch(`${this.apiBase}/extension/profile`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ profileData })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.success) {
+        console.log('✅ [ContextMe Background] Profile saved to cloud:', result.data)
+        return result.data
+      } else {
+        throw new Error(result.error || 'Failed to save profile')
+      }
+    } catch (error) {
+      console.error('❌ [ContextMe Background] Failed to save profile to cloud:', error)
+      throw error
+    }
   }
 
   async getUsageStats() {
@@ -280,11 +404,152 @@ class ContextMeBackground {
         if (result.apiPort) {
           this.apiPort = result.apiPort
           this.apiBase = `http://localhost:${this.apiPort}/api`
-          console.log('Port loaded from storage:', this.apiPort)
+          console.log('🔌 [ContextMe Background] Port loaded from storage:', this.apiPort)
         }
         resolve()
       })
     })
+  }
+
+  async loadAIStatus() {
+    console.log('🤖 [ContextMe Background] Loading AI status from storage...')
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['aiEnabled'], (result) => {
+        if (result.aiEnabled !== undefined) {
+          this.aiEnabled = result.aiEnabled
+          console.log('✅ [ContextMe Background] AI status loaded from storage:', this.aiEnabled)
+        } else {
+          console.log('📝 [ContextMe Background] No AI status found, using default:', this.aiEnabled)
+        }
+        resolve()
+      })
+    })
+  }
+
+  async saveAIStatus(enabled) {
+    console.log('💾 [ContextMe Background] Saving AI status to storage:', enabled)
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ aiEnabled: enabled }, () => {
+        console.log('✅ [ContextMe Background] AI status saved successfully')
+        resolve()
+      })
+    })
+  }
+
+  async saveMockAIStatus(enabled) {
+    console.log('💾 [ContextMe Background] Saving Mock AI status to storage:', enabled)
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ mockAIEnabled: enabled }, () => {
+        console.log('✅ [ContextMe Background] Mock AI status saved successfully')
+        resolve()
+      })
+    })
+  }
+
+  async loadMockAIStatus() {
+    console.log('🎭 [ContextMe Background] Loading Mock AI status from storage...')
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['mockAIEnabled'], (result) => {
+        if (result.mockAIEnabled !== undefined) {
+          this.mockAIEnabled = result.mockAIEnabled
+          console.log('✅ [ContextMe Background] Mock AI status loaded from storage:', this.mockAIEnabled)
+        } else {
+          console.log('📝 [ContextMe Background] No Mock AI status found, using default:', this.mockAIEnabled)
+        }
+        resolve()
+      })
+    })
+  }
+
+  async handleExtensionLogin(data) {
+    console.log('🔐 [ContextMe Background] Handling extension login with data:', data)
+    try {
+      // 检查是否使用 Google OAuth token
+      if (data.token) {
+        console.log('🔐 [ContextMe Background] Using Google OAuth token for login')
+        const response = await fetch(`${this.apiBase}/auth/google-extension`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ token: data.token })
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
+        if (result.success) {
+          const { token } = result.data
+          await this.saveAuthToken(token)
+          console.log('✅ [ContextMe Background] Google extension login successful')
+
+          // Notify popup of successful login
+          chrome.runtime.sendMessage({ type: 'LOGIN_SUCCESS' })
+          return
+        }
+      } else if (data.email) {
+        // 兼容旧的邮箱登录方式
+        console.log('🔐 [ContextMe Background] Using email login for:', data.email)
+        const response = await fetch(`${this.apiBase}/auth/extension`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email: data.email })
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
+        if (result.success) {
+          const { token } = result.data
+          await this.saveAuthToken(token)
+          console.log('✅ [ContextMe Background] Extension email login successful')
+
+          // Notify popup of successful login
+          chrome.runtime.sendMessage({ type: 'LOGIN_SUCCESS' })
+          return
+        }
+      }
+
+      throw new Error('Login failed - no valid authentication method provided')
+    } catch (error) {
+      console.error('❌ [ContextMe Background] Extension login error:', error)
+      throw error
+    }
+  }
+
+  async handleExtensionLogout() {
+    console.log('🚪 [ContextMe Background] Handling extension logout...')
+    try {
+      // Remove auth token
+      await new Promise((resolve) => {
+        chrome.storage.local.remove(['authToken'], resolve)
+      })
+
+      // Clear local profile but keep settings
+      const settings = await new Promise((resolve) => {
+        chrome.storage.local.get(['aiEnabled', 'apiPort', 'usageStats'], resolve)
+      })
+
+      await new Promise((resolve) => {
+        chrome.storage.local.clear(() => {
+          chrome.storage.local.set(settings, resolve)
+        })
+      })
+
+      console.log('✅ [ContextMe Background] Extension logout successful')
+
+      // Notify popup of logout
+      chrome.runtime.sendMessage({ type: 'LOGOUT_SUCCESS' })
+    } catch (error) {
+      console.error('❌ [ContextMe Background] Extension logout failed:', error)
+      throw error
+    }
   }
 }
 

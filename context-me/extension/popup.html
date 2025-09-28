@@ -254,7 +254,7 @@
         <div class="stats-item">
           <span class="label">API端口</span>
           <span class="value">
-            <input type="number" id="apiPort" style="width: 60px; padding: 2px 4px; border: 1px solid #e5e7eb; border-radius: 3px;" value="3000">
+            <input type="number" id="apiPort" style="width: 60px; padding: 2px 4px; border: 1px solid #e5e7eb; border-radius: 3px;" value="3001">
             <button id="updatePortButton" style="margin-left: 4px; padding: 2px 6px; font-size: 10px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">更新</button>
           </span>
         </div>
@@ -263,79 +263,118 @@
 
     <div class="divider"></div>
 
+    <!-- 登录区域 -->
+    <div id="loginSection" class="section">
+      <h3>用户登录</h3>
+      <p style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
+        请先登录以使用完整功能，您的设置将安全地保存在云端。
+      </p>
+      <button class="button" id="loginButton">登录扩展</button>
+    </div>
+
     <!-- 用户档案设置 -->
-    <div class="section">
-      <h3>个人信息</h3>
-
-      <div class="form-group">
-        <label>姓名</label>
-        <input type="text" id="userName" placeholder="请输入您的姓名">
+    <div id="profileSection" class="section" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3>个人信息</h3>
+        <button class="button secondary" id="logoutButton" style="width: auto; padding: 6px 12px; font-size: 11px;">退出登录</button>
       </div>
 
       <div class="form-group">
-        <label>邮箱</label>
-        <input type="email" id="userEmail" placeholder="请输入邮箱地址">
+        <label>您的目标</label>
+        <textarea id="userBackground" placeholder="请描述您的目标或目的，比如：学习编程、提高阅读效率、获取专业知识等"></textarea>
       </div>
 
-      <div class="form-group">
-        <label>背景</label>
-        <textarea id="userBackground" placeholder="请简单介绍您的背景，如职业、学历等"></textarea>
-      </div>
-    </div>
-
-    <div class="section">
-      <h3>兴趣爱好</h3>
-      <div class="form-group">
-        <label>兴趣标签</label>
-        <div class="tags-input" id="interestsTags">
-          <input type="text" placeholder="输入后按回车添加">
+      <div class="section">
+        <h3>兴趣爱好</h3>
+        <div class="form-group">
+          <label>兴趣标签</label>
+          <div class="tags-input" id="interestsTags">
+            <input type="text" placeholder="输入后按回车添加">
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <h3>目标</h3>
-      <div class="form-group">
-        <label>目标标签</label>
-        <div class="tags-input" id="goalsTags">
-          <input type="text" placeholder="输入后按回车添加">
+      <div class="section">
+        <h3>目标</h3>
+        <div class="form-group">
+          <label>目标标签</label>
+          <div class="tags-input" id="goalsTags">
+            <input type="text" placeholder="输入后按回车添加">
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <h3>技能</h3>
-      <div class="form-group">
-        <label>技能标签</label>
-        <div class="tags-input" id="skillsTags">
-          <input type="text" placeholder="输入后按回车添加">
+      <div class="section">
+        <h3>技能</h3>
+        <div class="form-group">
+          <label>技能标签</label>
+          <div class="tags-input" id="skillsTags">
+            <input type="text" placeholder="输入后按回车添加">
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="section">
-      <h3>偏好设置</h3>
+      <div class="section">
+        <h3>偏好设置</h3>
 
-      <div class="form-group">
-        <label>语言</label>
-        <select id="language">
-          <option value="zh">中文</option>
-          <option value="en">English</option>
-        </select>
+        <div class="form-group">
+          <label>AI功能</label>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f9fafb; border-radius: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
+              <input type="checkbox" id="aiEnabled" style="margin: 0;">
+              <span style="font-size: 13px; color: #374151; font-weight: 500;">启用AI内容解读</span>
+            </label>
+            <span id="aiStatus" style="font-size: 11px; color: #6b7280; margin-left: auto;">未启用</span>
+          </div>
+          <p style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+            启用后，在浏览网页时会自动分析内容并为您提供个性化洞察
+          </p>
+        </div>
+
+        <div class="form-group" id="refreshInstructions" style="display: none;">
+          <label>刷新提示</label>
+          <div style="padding: 8px; background: #dbeafe; border-radius: 6px; font-size: 12px; color: #1e40af;">
+            🔄 AI模式已启用，请手动刷新当前页面以查看AI提示
+          </div>
+        </div>
+
+        <div class="form-group" id="mockAISection">
+          <label>Mock AI功能</label>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #fef3c7; border-radius: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
+              <input type="checkbox" id="mockAIEnabled" style="margin: 0;">
+              <span style="font-size: 13px; color: #92400e; font-weight: 500;">启用Mock AI</span>
+            </label>
+            <span id="mockAIStatus" style="font-size: 11px; color: #6b7280; margin-left: auto;">未启用</span>
+          </div>
+          <p style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+            开发模式：在页面中注入模拟的AI洞察UI，用于测试界面样式
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>语言</label>
+          <select id="language">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>洞察风格</label>
+          <select id="insightStyle">
+            <option value="detailed">详细</option>
+            <option value="concise">简洁</option>
+            <option value="actionable">实用</option>
+          </select>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>洞察风格</label>
-        <select id="insightStyle">
-          <option value="detailed">详细</option>
-          <option value="concise">简洁</option>
-          <option value="actionable">实用</option>
-        </select>
+      <div style="display: flex; gap: 8px; margin-top: 24px;">
+        <button class="button" id="saveButton" style="flex: 1;">保存设置</button>
+        <button class="button secondary" id="resetButton" style="flex: 1;">重置</button>
       </div>
     </div>
-
-    <button class="button" id="saveButton">保存设置</button>
-    <button class="button secondary" id="resetButton">重置</button>
 
     <div class="loading" id="loading">
       正在保存...
