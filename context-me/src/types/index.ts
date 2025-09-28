@@ -1,0 +1,75 @@
+export interface UserProfile {
+  id?: string
+  userId: string
+  profileData: ProfileData
+  version: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ProfileData {
+  name?: string
+  email?: string
+  background?: string
+  interests: string[]
+  goals: string[]
+  skills: string[]
+  preferences?: {
+    language?: string
+    insightStyle?: 'detailed' | 'concise' | 'actionable'
+  }
+}
+
+export interface ContentAnalysis {
+  id?: string
+  contentHash: string
+  url?: string
+  title?: string
+  contentType: 'course' | 'job' | 'product' | 'article' | 'other'
+  extractedData: {
+    summary?: string
+    keyPoints?: string[]
+    tags?: string[]
+    difficulty?: 'beginner' | 'intermediate' | 'advanced'
+  }
+  createdAt: Date
+}
+
+export interface Insight {
+  id: string
+  userId: string
+  contentHash: string
+  insight: string
+  relevanceScore: number
+  category: 'opportunity' | 'recommendation' | 'warning' | 'information'
+  createdAt: Date
+}
+
+export interface User {
+  id: string
+  email: string
+  stripeCustomerId?: string
+  subscriptionStatus: 'free' | 'active' | 'cancelled' | 'past_due'
+  subscriptionTier: 'basic' | 'pro' | 'enterprise'
+  trialEndsAt?: Date
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface UsageLog {
+  id: string
+  userId: string
+  actionType: 'generate_insight' | 'view_content' | 'update_profile'
+  contentHash?: string
+  tokensUsed?: number
+  costCents?: number
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+  message?: string
+}

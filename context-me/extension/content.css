@@ -1,0 +1,96 @@
+/* ContextMe Content Script Styles */
+
+#contextme-insights-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.contextme-insight {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.contextme-insight:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+.contextme-insight.collapsed {
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.contextme-insight.expanded {
+  max-height: none;
+}
+
+.contextme-insight .loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #6b7280;
+}
+
+.contextme-insight .loading::after {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  #contextme-insights-container {
+    width: calc(100% - 40px);
+    left: 20px;
+    right: 20px;
+  }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .contextme-insight {
+    background: #1f2937;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .contextme-insight h3 {
+    color: #f9fafb;
+  }
+
+  .contextme-insight .insight-text {
+    color: #d1d5db;
+  }
+
+  .contextme-insight .meta {
+    color: #9ca3af;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  #contextme-insights-container {
+    display: none;
+  }
+}

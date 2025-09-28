@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户基础表
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  stripeCustomerId    String?
+  subscriptionStatus  String   @default("free")
+  subscriptionTier    String   @default("basic")
+  trialEndsAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // 关联
+  profiles    UserProfile[]
+  usageLogs   UsageLog[]
+  subscriptions Subscription[]
+
+  @@map("users")
+}
+
+// 用户档案表
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String
+  profileData Json
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+// 内容指纹表
+model ContentFingerprint {
+  id            String   @id @default(cuid())
+  contentHash   String   @unique
+  url           String?
+  title         String?
+  contentType   String?
+  extractedData Json?
+  createdAt     DateTime @default(now())
+
+  @@map("content_fingerprints")
+}
+
+// 使用日志表
+model UsageLog {
+  id         String   @id @default(cuid())
+  userId     String
+  actionType String
+  contentHash String?
+  tokensUsed Int?
+  costCents  Int?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("usage_logs")
+}
+
+// 订阅表
+model Subscription {
+  id                     String   @id @default(cuid())
+  userId                 String
+  stripeSubscriptionId   String   @unique
+  status                 String
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  priceId                String?
+  createdAt              DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("subscriptions")
+}

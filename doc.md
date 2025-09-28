@@ -30,19 +30,9 @@
 
 **EdgeOne 兼容方案：**
 
-1. **Redis (主推荐)**
-   - 腾讯云 Redis 与 EdgeOne 配合最佳
-   - 适合用户会话、缓存、实时数据
-   - 支持 JSON 存储，schema 灵活
-
-2. **PostgreSQL + PgVector**
-   - 腾讯云 PostgreSQL
-   - PgVector 扩展支持向量存储（未来语义搜索）
-   - ACID 保证，复杂查询支持
-
-3. **混合方案（推荐）：**
-   - Redis：用户会话、API 缓存、热数据
-   - PostgreSQL：用户档案、使用统计、持久化数据
+1. Upstash Redis (边缘缓存) - 无服务器，全球分布
+2. Neon PostgreSQL (主数据库) - 无服务器，自动扩缩容
+3. 混合方案：Upstash Redis + Neon PostgreSQL
 
 ## MVP 架构图
 
@@ -60,8 +50,8 @@ Next.js API (Edge Runtime)
 └── /api/insights (生成洞察)
         ↓
 数据层
-├── Redis (会话/缓存)
-├── PostgreSQL (持久化)
+├── Upstash Redis (边缘缓存)
+├── Neon PostgreSQL (持久化)
 └── OpenAI API (AI 处理)
 ```
 
@@ -91,10 +81,11 @@ Next.js API (Edge Runtime)
 - 成本相对较低
 
 **推荐部署方案：**
-- 静态资源：EdgeOne CDN
-- API：EdgeOne Edge Functions 或腾讯云 Serverless
-- 数据库：腾讯云 Redis + PostgreSQL
-- 域名：EdgeOne 域名管理
+静态资源：EdgeOne CDN
+API：EdgeOne Edge Functions
+数据库：Neon PostgreSQL (无服务器)
+缓存：Upstash Redis (边缘分布)
+域名：EdgeOne 域名管理
 
 ## MVP 开发优先级
 
@@ -259,9 +250,9 @@ Next.js API (Edge Runtime)
 **多层缓存架构**:
 ```
 L1: 浏览器本地存储 (用户档案)
-L2: Background Worker 内存 (会话缓存)
-L3: Redis 集群 (分布式缓存)
-L4: CDN 边缘缓存 (静态资源)
+L2: Background Worker 内存 (会话缓存)  
+L3: Upstash Redis 边缘节点 (分布式缓存)
+L4: EdgeOne CDN (静态资源)
 ```
 
 **缓存策略**:
@@ -332,8 +323,8 @@ API 调用超时: 10秒
 
 ### 1. 水平扩展能力
 - **无状态 API**: 支持多实例部署
-- **数据库读写分离**: PostgreSQL 主从复制
-- **Redis 集群**: 支持数据分片和高可用
+- 数据库自动扩缩容: Neon PostgreSQL 无服务器特性
+- Redis 全球分布: Upstash Redis 边缘网络自动扩展
 
 ### 2. 功能扩展接口
 - **洞察类型插件化**: 支持添加新的分析维度
@@ -384,8 +375,8 @@ API 调用超时: 10秒
 
 **开发任务**:
 - Next.js 项目初始化（Edge Runtime）
-- PostgreSQL 数据库设计和迁移
-- Redis 连接配置
+- Neon PostgreSQL 项目创建和连接配置
+- Upstash Redis 账号设置和 REST API 配置
 - 基础中间件（CORS、限流、错误处理）
 
 **可测试结果**:
@@ -599,3 +590,665 @@ API 调用超时: 10秒
 
 这个开发流程确保每个阶段都有明确的、可测试的交付物，同时严格遵循 SOLID、YAGNI、KISS 原则。每个阶段完成后都有清晰的验收标准，便于项目管理和质量控制。你觉得还需要调整哪些部分？
 
+
+# ContextMe MVP 修订架构方案
+*基于 Upstash Redis + Neon PostgreSQL + EdgeOne*
+
+## 修订后的技术栈
+
+### 核心技术选型
+- **前端**: Chrome Extension (Manifest V3) + React + TypeScript
+- **后端**: Next.js 14 (App Router + Edge Runtime)
+- **数据库**: Neon PostgreSQL (无服务器)
+- **缓存**: Upstash Redis (边缘缓存)
+- **部署**: EdgeOne (腾讯云边缘计算)
+- **认证**: NextAuth.js + JWT
+- **支付**: Stripe
+- **AI**: OpenAI API
+
+### 架构优势
+- **零运维**: 所有服务都是无服务器/托管服务
+- **全球加速**: EdgeOne + Upstash 边缘网络
+- **成本可控**: 免费层充足，按使用量付费
+- **开发友好**: 与 Next.js 生态完美集成
+
+## 详细系统架构
+
+### 1. 数据存储分层设计
+
+#### Upstash Redis (L1 缓存层)
+```
+用户档案缓存: user:profile:{userId} -> JSON (TTL: 1h)
+内容分析缓存: content:{contentHash} -> JSON (TTL: 24h)
+洞察结果缓存: insight:{userId}:{contentHash} -> JSON (TTL: 1h)
+会话管理: session:{sessionId} -> JSON (TTL: 30min)
+API 限流: rate_limit:{userId}:{endpoint} -> counter (TTL: 1min)
+使用统计: usage:{userId}:{date} -> JSON (TTL: 7d)
+```
+
+#### Neon PostgreSQL (持久化层)
+```sql
+-- 用户基础表
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR UNIQUE NOT NULL,
+    stripe_customer_id VARCHAR,
+    subscription_status VARCHAR DEFAULT 'free',
+    subscription_tier VARCHAR DEFAULT 'basic',
+    trial_ends_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 用户档案表
+CREATE TABLE user_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    profile_data JSONB NOT NULL,
+    version INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 内容指纹表
+CREATE TABLE content_fingerprints (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    content_hash VARCHAR UNIQUE NOT NULL,
+    url VARCHAR,
+    title VARCHAR,
+    content_type VARCHAR,
+    extracted_data JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 使用日志表
+CREATE TABLE usage_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    action_type VARCHAR NOT NULL,
+    content_hash VARCHAR,
+    tokens_used INTEGER,
+    cost_cents INTEGER,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 订阅表
+CREATE TABLE subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    stripe_subscription_id VARCHAR UNIQUE,
+    status VARCHAR,
+    current_period_start TIMESTAMP,
+    current_period_end TIMESTAMP,
+    price_id VARCHAR,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 索引优化
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_user_profiles_user_id ON user_profiles(user_id);
+CREATE INDEX idx_usage_logs_user_id_created ON usage_logs(user_id, created_at);
+CREATE INDEX idx_content_fingerprints_hash ON content_fingerprints(content_hash);
+```
+
+### 2. 系统模块重新设计
+
+#### Chrome Extension 模块
+
+**Content Script Manager**
+```typescript
+// 职责：页面内容检测和 UI 注入
+class ContentScriptManager {
+  - detectPageContent(): PageContent
+  - injectInsightUI(insights: Insight[]): void
+  - handleUserInteraction(): void
+  - communicateWithBackground(): void
+}
+```
+
+**Background Service Worker**
+```typescript  
+// 职责：API 调用和状态管理
+class BackgroundWorker {
+  - manageAPIRequests(): void
+  - handleAuthentication(): void
+  - syncUserProfile(): void
+  - cacheManagement(): void
+}
+```
+
+#### Next.js API 模块
+
+**API Routes 设计**
+```
+/api/auth/* - NextAuth.js 认证端点
+/api/content/analyze - 内容分析服务
+/api/insights/generate - 洞察生成服务  
+/api/profile/* - 用户档案管理
+/api/usage/* - 使用统计和限制
+/api/billing/* - Stripe 支付集成
+/api/health - 健康检查
+```
+
+**Edge Runtime 优化**
+```typescript
+// 所有 API 路由使用 Edge Runtime
+export const runtime = 'edge'
+export const preferredRegion = ['hkg1', 'sin1', 'fra1'] // EdgeOne 节点
+```
+
+### 3. 详细数据流设计
+
+#### 主数据流：用户获取洞察
+
+```mermaid
+sequenceDiagram
+    participant CE as Chrome Extension
+    participant EO as EdgeOne
+    participant UR as Upstash Redis
+    participant NP as Neon PostgreSQL
+    participant AI as OpenAI API
+    
+    CE->>EO: 请求洞察 (页面内容)
+    EO->>UR: 检查缓存
+    
+    alt 缓存命中
+        UR->>EO: 返回缓存结果
+        EO->>CE: 洞察结果 (<500ms)
+    else 缓存未命中
+        EO->>NP: 查询用户档案
+        EO->>AI: 生成洞察
+        AI->>EO: AI 响应
+        EO->>UR: 缓存结果
+        EO->>NP: 记录使用日志
+        EO->>CE: 洞察结果 (<3s)
+    end
+```
+
+#### 用户档案同步流
+
+```mermaid
+sequenceDiagram
+    participant UI as Extension UI
+    participant BG as Background Worker
+    participant EO as EdgeOne API
+    participant UR as Upstash Redis
+    participant NP as Neon PostgreSQL
+    
+    UI->>BG: 更新档案
+    BG->>BG: 本地存储更新
+    BG->>EO: 异步同步到云端
+    EO->>NP: 持久化档案
+    EO->>UR: 清除相关缓存
+    EO->>BG: 确认同步成功
+```
+
+### 4. 性能优化策略
+
+#### 缓存策略优化
+
+**L1: Browser Storage (Chrome Extension)**
+```typescript
+// 用户档案本地缓存
+chrome.storage.local.set({
+  userProfile: profileData,
+  lastSync: Date.now()
+})
+
+// 最近洞察结果缓存
+chrome.storage.session.set({
+  recentInsights: insights
+})
+```
+
+**L2: Upstash Redis (边缘缓存)**
+```typescript
+// 智能缓存键设计
+const cacheKeys = {
+  userProfile: `profile:${userId}:v${version}`,
+  contentAnalysis: `content:${sha256(content)}`,
+  personalInsight: `insight:${userId}:${contentHash}`,
+  usageLimit: `limit:${userId}:${period}`
+}
+
+// TTL 策略
+const cacheTTL = {
+  userProfile: 3600, // 1小时
+  contentAnalysis: 86400, // 24小时
+  personalInsight: 3600, // 1小时  
+  usageLimit: 60 // 1分钟
+}
+```
+
+**L3: EdgeOne CDN**
+```typescript
+// API 响应缓存配置
+export const dynamic = 'force-dynamic' // 用户相关数据
+export const revalidate = 300 // 通用内容 5分钟缓存
+```
+
+#### 数据库优化
+
+**Neon PostgreSQL 连接优化**
+```typescript
+// 使用连接池
+import { Pool } from '@neondatabase/serverless'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: true
+})
+
+// Edge Runtime 兼容的查询
+export async function getUserProfile(userId: string) {
+  const client = pool.connect()
+  // 优化查询...
+}
+```
+
+**批量操作优化**
+```sql
+-- 批量插入使用日志
+INSERT INTO usage_logs (user_id, action_type, tokens_used, created_at)
+VALUES 
+  (unnest($1::uuid[]), unnest($2::text[]), unnest($3::int[]), unnest($4::timestamp[]))
+ON CONFLICT DO NOTHING;
+```
+
+## Stripe 支付集成详细设计
+
+### 1. 订阅模型设计
+
+```typescript
+// 订阅计划配置
+export const SUBSCRIPTION_PLANS = {
+  free: {
+    id: 'free',
+    name: 'Free',
+    price: 0,
+    limits: {
+      insightsPerDay: 10,
+      aiCallsPerMonth: 50,
+      advancedFeatures: false
+    }
+  },
+  pro: {
+    id: 'pro', 
+    name: 'Pro',
+    price: 9.99,
+    stripePriceId: 'price_1234567890',
+    limits: {
+      insightsPerDay: 100,
+      aiCallsPerMonth: 1000,
+      advancedFeatures: true,
+      prioritySupport: false
+    }
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise',
+    price: 29.99,
+    stripePriceId: 'price_0987654321', 
+    limits: {
+      insightsPerDay: -1, // unlimited
+      aiCallsPerMonth: -1,
+      advancedFeatures: true,
+      prioritySupport: true
+    }
+  }
+} as const
+```
+
+### 2. 支付 API 设计
+
+```typescript
+// /api/billing/create-checkout-session
+export async function POST(request: Request) {
+  const { priceId, userId } = await request.json()
+  
+  const session = await stripe.checkout.sessions.create({
+    customer: user.stripeCustomerId,
+    payment_method_types: ['card'],
+    line_items: [{
+      price: priceId,
+      quantity: 1,
+    }],
+    mode: 'subscription',
+    success_url: `${process.env.NEXT_PUBLIC_URL}/success`,
+    cancel_url: `${process.env.NEXT_PUBLIC_URL}/pricing`,
+    metadata: { userId }
+  })
+  
+  return Response.json({ url: session.url })
+}
+
+// /api/billing/webhook - Stripe Webhook 处理
+export async function POST(request: Request) {
+  const signature = request.headers.get('stripe-signature')
+  
+  try {
+    const event = stripe.webhooks.constructEvent(
+      await request.text(),
+      signature!,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    )
+    
+    switch (event.type) {
+      case 'customer.subscription.created':
+        await handleSubscriptionCreated(event.data.object)
+        break
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object)
+        break
+      case 'customer.subscription.deleted':
+        await handleSubscriptionCanceled(event.data.object)
+        break
+    }
+    
+    return Response.json({ received: true })
+  } catch (error) {
+    return Response.json({ error: 'Webhook error' }, { status: 400 })
+  }
+}
+```
+
+### 3. 使用限制中间件
+
+```typescript
+// middleware/rateLimit.ts
+export async function checkUsageLimit(userId: string, action: string): Promise<boolean> {
+  const user = await getUserWithSubscription(userId)
+  const limits = SUBSCRIPTION_PLANS[user.subscriptionTier].limits
+  
+  // 检查当日使用量
+  const todayUsage = await redis.get(`usage:${userId}:${today}`)
+  
+  switch (action) {
+    case 'generate_insight':
+      return limits.insightsPerDay === -1 || todayUsage < limits.insightsPerDay
+    case 'ai_call':
+      const monthlyUsage = await getMonthlyUsage(userId)
+      return limits.aiCallsPerMonth === -1 || monthlyUsage < limits.aiCallsPerMonth
+    default:
+      return true
+  }
+}
+```
+
+## EdgeOne 部署配置
+
+### 1. 项目构建配置
+
+```typescript
+// next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'standalone',
+  experimental: {
+    runtime: 'edge'
+  },
+  env: {
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    DATABASE_URL: process.env.DATABASE_URL,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY
+  }
+}
+
+module.exports = nextConfig
+```
+
+### 2. EdgeOne 边缘函数配置
+
+```javascript
+// edgeone-config.js
+export default {
+  routes: [
+    {
+      path: '/api/*',
+      handler: 'edge-function',
+      cache: {
+        ttl: 0, // 不缓存 API 响应
+        vary: ['Authorization']
+      }
+    },
+    {
+      path: '/static/*',
+      handler: 'static',
+      cache: {
+        ttl: 86400, // 静态资源缓存 24 小时
+        compress: true
+      }
+    }
+  ],
+  regions: ['ap-hongkong', 'ap-singapore', 'eu-frankfurt'],
+  env: {
+    NODE_ENV: 'production'
+  }
+}
+```
+
+### 3. 部署脚本
+
+```bash
+#!/bin/bash
+# deploy.sh
+
+echo "🚀 开始部署 ContextMe 到 EdgeOne..."
+
+# 1. 构建项目
+echo "📦 构建 Next.js 项目..."
+npm run build
+
+# 2. 数据库迁移
+echo "🗄️ 运行数据库迁移..."
+npx prisma migrate deploy
+
+# 3. 上传到 EdgeOne
+echo "☁️ 部署到 EdgeOne..."
+edgeone-cli deploy --config edgeone-config.js
+
+# 4. 健康检查
+echo "🏥 运行健康检查..."
+curl -f https://api.contextme.com/api/health || exit 1
+
+echo "✅ 部署完成！"
+```
+
+## 修订后的开发流程
+
+### Phase 1: 基础架构 (Week 1-2)
+
+#### 1.1 开发环境设置
+**任务清单**:
+- [ ] Neon PostgreSQL 项目创建和配置
+- [ ] Upstash Redis 账号设置和连接测试
+- [ ] Next.js 项目初始化（App Router）
+- [ ] Prisma ORM 配置和数据库 schema
+- [ ] Chrome Extension 基础框架
+
+**可测试结果**:
+```
+✅ 本地开发环境完整运行
+✅ 数据库连接和基础 CRUD 操作正常
+✅ Redis 缓存读写功能正常
+✅ Chrome Extension 在浏览器中成功加载
+✅ API 健康检查端点返回 200
+```
+
+#### 1.2 认证系统基础
+**任务清单**:
+- [ ] NextAuth.js 配置（JWT + Google OAuth）
+- [ ] 用户注册和登录 API
+- [ ] Chrome Extension 认证集成
+- [ ] Stripe Customer 创建
+
+**可测试结果**:
+```
+✅ 用户可以通过 Google 账号登录
+✅ JWT Token 在 Extension 中正确管理
+✅ 用户登录后自动创建 Stripe Customer
+✅ 认证状态在页面刷新后保持
+✅ 退出登录功能正常
+```
+
+### Phase 2: 核心功能实现 (Week 3-4)
+
+#### 2.1 内容分析服务
+**任务清单**:
+- [ ] 页面内容提取算法
+- [ ] 内容指纹生成和去重
+- [ ] `/api/content/analyze` API 实现
+- [ ] 缓存策略实现
+
+**可测试结果**:
+```
+✅ 能准确提取主流网站核心内容
+✅ 相同内容生成一致的哈希值
+✅ 内容分析结果缓存 24 小时
+✅ API 响应时间 < 2秒
+✅ 支持中英文内容分析
+```
+
+#### 2.2 用户档案管理
+**任务清单**:
+- [ ] 用户档案数据模型完善
+- [ ] `/api/profile/*` CRUD API
+- [ ] 档案版本控制
+- [ ] 本地与云端同步机制
+
+**可测试结果**:
+```
+✅ 档案在本地和云端保持同步
+✅ 档案更新后相关缓存自动失效
+✅ 支持档案历史版本查询
+✅ 并发更新冲突正确处理
+✅ 档案数据验证和错误处理完善
+```
+
+### Phase 3: AI 集成与优化 (Week 5-6)
+
+#### 3.1 洞察生成服务
+**任务清单**:
+- [ ] OpenAI API 集成和错误处理
+- [ ] Prompt 工程和模板管理
+- [ ] `/api/insights/generate` API
+- [ ] 结果质量评估机制
+
+**可测试结果**:
+```
+✅ AI 洞察生成成功率 > 95%
+✅ 洞察内容与用户档案高度相关
+✅ 复杂内容简化为易懂语言
+✅ AI API 调用成本控制在预算内
+✅ 降级策略在 AI 不可用时生效
+```
+
+#### 3.2 性能优化和缓存
+**任务清单**:
+- [ ] 多层缓存策略实现
+- [ ] 数据库查询优化
+- [ ] API 响应时间优化
+- [ ] 使用量统计和限制
+
+**可测试结果**:
+```
+✅ 缓存命中率 > 70%
+✅ 缓存命中时响应时间 < 500ms
+✅ 数据库查询平均耗时 < 100ms
+✅ 免费用户每日限制正确执行
+✅ 使用统计数据准确记录
+```
+
+### Phase 4: 支付集成 (Week 7-8)
+
+#### 4.1 Stripe 支付流程
+**任务清单**:
+- [ ] Stripe Checkout 集成
+- [ ] 订阅状态管理
+- [ ] Webhook 处理
+- [ ] 客户门户访问
+
+**可测试结果**:
+```
+✅ 用户可以成功订阅 Pro 计划
+✅ 订阅状态实时同步到数据库
+✅ Webhook 事件正确处理
+✅ 用户可以管理订阅和付款方式
+✅ 试用期和订阅到期正确处理
+```
+
+#### 4.2 用户界面完善
+**任务清单**:
+- [ ] 洞察展示 UI 组件
+- [ ] 升级提示和定价页面
+- [ ] 使用统计仪表板
+- [ ] 错误状态和加载状态
+
+**可测试结果**:
+```
+✅ 洞察在页面上优雅展示
+✅ UI 在不同网站上样式一致
+✅ 升级提示适时出现且不打扰
+✅ 用户可以查看使用统计和剩余额度
+✅ 所有错误状态都有友好提示
+```
+
+### Phase 5: 部署与监控 (Week 9-10)
+
+#### 5.1 EdgeOne 生产部署
+**任务清单**:
+- [ ] EdgeOne 边缘函数配置
+- [ ] 环境变量和域名设置
+- [ ] SSL 证书和 CDN 配置
+- [ ] 部署自动化脚本
+
+**可测试结果**:
+```
+✅ 生产环境部署成功且稳定运行
+✅ 全球访问延迟 < 3秒
+✅ SSL 证书正确配置
+✅ 自动部署流水线工作正常
+✅ 域名解析和 CDN 缓存配置正确
+```
+
+#### 5.2 监控和运维
+**任务清单**:
+- [ ] 应用性能监控设置
+- [ ] 错误追踪和告警
+- [ ] 使用量和成本监控
+- [ ] 备份和恢复策略
+
+**可测试结果**:
+```
+✅ 实时监控仪表板显示关键指标
+✅ 错误发生时及时收到告警
+✅ 每日/月度使用报告自动生成
+✅ 数据库备份策略正确执行
+✅ 灾难恢复流程测试通过
+```
+
+## 成本预算
+
+### 开发阶段成本（月）
+```
+Neon PostgreSQL: $0 (免费层)
+Upstash Redis: $0 (免费层) 
+EdgeOne: ¥100 ($14)
+OpenAI API: $20-50 (基于使用量)
+Stripe: $0 (仅交易费)
+总计: $34-64/月
+```
+
+### 生产阶段成本预估（100 活跃用户）
+```
+Neon PostgreSQL: $20/月
+Upstash Redis: $10/月
+EdgeOne: ¥300 ($42)/月
+OpenAI API: $100-200/月
+总计: $172-272/月
+```
+
+这个修订方案既保持了高性能，又大大简化了部署和维护的复杂度。所有服务都是按使用量付费，非常适合 MVP 阶段的快速迭代和成本控制。你觉得这个方案如何？

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContextMe 设置</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 400px;
+      min-height: 500px;
+      background: #ffffff;
+      color: #1f2937;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #374151;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 13px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .tags-input {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      min-height: 40px;
+      cursor: text;
+    }
+
+    .tag {
+      background: #f3f4f6;
+      color: #374151;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tag .remove {
+      cursor: pointer;
+      color: #9ca3af;
+      font-weight: bold;
+    }
+
+    .tag .remove:hover {
+      color: #ef4444;
+    }
+
+    .tags-input input {
+      border: none;
+      outline: none;
+      flex: 1;
+      min-width: 60px;
+      padding: 2px;
+    }
+
+    .button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+    }
+
+    .button:hover {
+      background: #5a67d8;
+    }
+
+    .button.secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .button.secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .stats {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .stats-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .stats-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .stats-item .label {
+      color: #6b7280;
+    }
+
+    .stats-item .value {
+      font-weight: 500;
+      color: #1f2937;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .status.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .status.info {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 20px 0;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .loading.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ContextMe</h1>
+    <p>个性化内容洞察助手</p>
+  </div>
+
+  <div class="content">
+    <!-- 状态提示 -->
+    <div id="status" class="status" style="display: none;"></div>
+
+    <!-- 使用统计 -->
+    <div class="section">
+      <h3>使用统计</h3>
+      <div class="stats">
+        <div class="stats-item">
+          <span class="label">今日使用</span>
+          <span class="value" id="todayUsage">-</span>
+        </div>
+        <div class="stats-item">
+          <span class="label">总计使用</span>
+          <span class="value" id="totalUsage">-</span>
+        </div>
+        <div class="stats-item">
+          <span class="label">状态</span>
+          <span class="value" id="connectionStatus">检测中...</span>
+        </div>
+        <div class="stats-item">
+          <span class="label">API端口</span>
+          <span class="value">
+            <input type="number" id="apiPort" style="width: 60px; padding: 2px 4px; border: 1px solid #e5e7eb; border-radius: 3px;" value="3000">
+            <button id="updatePortButton" style="margin-left: 4px; padding: 2px 6px; font-size: 10px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">更新</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 用户档案设置 -->
+    <div class="section">
+      <h3>个人信息</h3>
+
+      <div class="form-group">
+        <label>姓名</label>
+        <input type="text" id="userName" placeholder="请输入您的姓名">
+      </div>
+
+      <div class="form-group">
+        <label>邮箱</label>
+        <input type="email" id="userEmail" placeholder="请输入邮箱地址">
+      </div>
+
+      <div class="form-group">
+        <label>背景</label>
+        <textarea id="userBackground" placeholder="请简单介绍您的背景，如职业、学历等"></textarea>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>兴趣爱好</h3>
+      <div class="form-group">
+        <label>兴趣标签</label>
+        <div class="tags-input" id="interestsTags">
+          <input type="text" placeholder="输入后按回车添加">
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>目标</h3>
+      <div class="form-group">
+        <label>目标标签</label>
+        <div class="tags-input" id="goalsTags">
+          <input type="text" placeholder="输入后按回车添加">
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>技能</h3>
+      <div class="form-group">
+        <label>技能标签</label>
+        <div class="tags-input" id="skillsTags">
+          <input type="text" placeholder="输入后按回车添加">
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>偏好设置</h3>
+
+      <div class="form-group">
+        <label>语言</label>
+        <select id="language">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>洞察风格</label>
+        <select id="insightStyle">
+          <option value="detailed">详细</option>
+          <option value="concise">简洁</option>
+          <option value="actionable">实用</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="button" id="saveButton">保存设置</button>
+    <button class="button secondary" id="resetButton">重置</button>
+
+    <div class="loading" id="loading">
+      正在保存...
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
