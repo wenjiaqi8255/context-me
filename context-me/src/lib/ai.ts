@@ -1,3 +1,5 @@
+import { UserProfile, ContentAnalysis } from '@/types'
+
 interface AIRequest {
   model: string
   messages: Array<{
@@ -21,6 +23,18 @@ interface AIResponse {
   }
 }
 
+interface ParsedInsights {
+  insights: Array<{
+    sectionId: string
+    sectionType: string
+    insight: string
+    relevance: number
+    category: 'recommendation' | 'opportunity' | 'warning' | 'information'
+    actionItems: string[]
+  }>
+  summary: string
+}
+
 export class AIService {
   private apiKey: string
   private baseUrl: string
@@ -31,10 +45,10 @@ export class AIService {
   }
 
   async generateInsight(
-    userProfile: any,
-    contentAnalysis: any,
+    userProfile: UserProfile,
+    contentAnalysis: ContentAnalysis,
     systemPrompt?: string
-  ): Promise<{ content: string; usage?: any }> {
+  ): Promise<{ content: string; usage?: any; parsedInsights?: ParsedInsights }> {
     const prompt = this.buildInsightPrompt(userProfile, contentAnalysis)
 
     const request: AIRequest = {
@@ -68,10 +82,12 @@ export class AIService {
       }
 
       const data: AIResponse = await response.json()
+      const content = data.choices[0]?.message?.content || 'Unable to generate insight'
 
       return {
-        content: data.choices[0]?.message?.content || 'Unable to generate insight',
-        usage: data.usage
+        content: content,
+        usage: data.usage,
+        parsedInsights: this.parseInsightResponse(content)
       }
     } catch (error) {
       console.error('AI service error:', error)
@@ -79,12 +95,15 @@ export class AIService {
     }
   }
 
-  private buildInsightPrompt(userProfile: any, contentAnalysis: any): string {
+  private buildInsightPrompt(userProfile: UserProfile, contentAnalysis: ContentAnalysis): string {
     const { background, interests, goals, skills } = userProfile.profileData
-    const { title, contentType, extractedData } = contentAnalysis
+    const { title, sections, contentType } = contentAnalysis
+
+    // Ensure sections is an array, even if it's undefined or null
+    const sectionsArray = Array.isArray(sections) ? sections : []
 
     return `
-请基于以下用户信息和内容分析，生成个性化的洞察和建议：
+请基于以下用户信息和内容分析，为每个内容段落生成个性化的洞察和建议：
 
 【用户档案】
 背景：${background || '未提供'}
@@ -95,18 +114,76 @@ export class AIService {
 【内容分析】
 标题：${title || '未提供'}
 类型：${contentType}
-摘要：${extractedData?.summary || '未提供'}
-关键点：${extractedData?.keyPoints?.join(', ') || '未提供'}
-难度：${extractedData?.difficulty || '未提供'}
 
-请生成个性化的洞察，包括：
-1. 这份内容对用户的相关性分析
-2. 基于用户目标的具体建议
-3. 可能的后续行动推荐
-4. 潜在的注意事项或提醒
+【内容段落】
+${sectionsArray.length > 0 ? sectionsArray.map((section, index) => `
+段落 ${index + 1} (${section.type || 'text'}):
+${section.content || ''}
+`).join('\n') : '无可用内容段落'}
 
-请用${userProfile.profileData.preferences?.language === 'zh' ? '中文' : '英文'}回答，风格为${userProfile.profileData.preferences?.insightStyle || 'detailed'}。
+请为每个段落生成个性化的洞察，并以JSON格式返回。返回格式如下：
+{
+  "insights": [
+    {
+      "sectionId": "section-0",
+      "sectionType": "p",
+      "insight": "针对该段落的具体洞察和建议",
+      "relevance": 0.8,
+      "category": "recommendation",
+      "actionItems": ["具体行动建议1", "具体行动建议2"]
+    }
+  ],
+  "summary": "整体内容的相关性分析和总体建议"
+}
+
+要求：
+1. 只对与用户兴趣、目标或技能相关的段落生成洞察
+2. 每个洞察要具体、实用，针对段落内容
+3. 相关性评分0-1，1表示高度相关
+4. 分类：recommendation（建议）、opportunity（机会）、warning（提醒）、information（信息）
+5. 请用${userProfile.profileData.preferences?.language === 'zh' ? '中文' : '英文'}回答
+
+请只返回JSON格式的响应，不要包含其他文字。
     `.trim()
+  }
+
+  private parseInsightResponse(content: string): ParsedInsights {
+    try {
+      // 尝试提取JSON部分
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        console.log('✅ [AI Service] Successfully parsed structured insights')
+        return parsed
+      }
+
+      // 如果没有找到JSON，返回fallback格式
+      console.log('⚠️ [AI Service] No JSON found in response, using fallback format')
+      return {
+        insights: [{
+          sectionId: 'fallback',
+          sectionType: 'general',
+          insight: content,
+          relevance: 0.5,
+          category: 'information',
+          actionItems: []
+        }],
+        summary: content
+      }
+    } catch (error) {
+      console.error('❌ [AI Service] Failed to parse insight response:', error)
+      return {
+        insights: [{
+          sectionId: 'error',
+          sectionType: 'general',
+          insight: content,
+          relevance: 0.3,
+          category: 'information',
+          actionItems: []
+        }],
+        summary: '解析洞察时遇到错误，显示原始内容'
+      }
+    }
   }
 
   private getDefaultSystemPrompt(): string {

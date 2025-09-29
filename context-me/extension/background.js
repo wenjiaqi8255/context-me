@@ -62,9 +62,23 @@ class ContextMeBackground {
           break
 
         case 'SAVE_USER_PROFILE':
-          await this.saveLocalProfile(data.profileData)
-          await this.syncProfileToCloud(data.profileData)
-          sendResponse({ success: true, data: { profileData: data.profileData } })
+          // Get the current user info to get userId
+          try {
+            const currentUser = await this.getCurrentUser()
+            const completeProfile = {
+              userId: currentUser.id,
+              profileData: data.profileData,
+              version: 1,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+            await this.saveLocalProfile(completeProfile)
+            await this.syncProfileToCloud(data.profileData)
+            sendResponse({ success: true, data: completeProfile })
+          } catch (error) {
+            console.error('❌ [ContextMe Background] Failed to get current user:', error)
+            sendResponse({ success: false, error: 'Failed to get user information' })
+          }
           break
 
         case 'EXTENSION_LOGIN':
@@ -132,20 +146,23 @@ class ContextMeBackground {
   }
 
   
-  async analyzeContent({ url, title, content }) {
+  async analyzeContent({ url, title, sections, fullContent }) {
     // 检查本地缓存
-    const cacheKey = `content:${this.hashContent(content)}`
+    const cacheKey = `content:${this.hashContent(fullContent)}`
     const cached = await this.getCachedData(cacheKey)
     if (cached) {
       return cached
     }
+
+    const payload = { url, title, content: fullContent, sections, contentType: 'article' }
+    console.log('📤 [ContextMe Background] Sending content analysis request:', payload)
 
     const response = await fetch(`${this.apiBase}/content/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url, title, content })
+      body: JSON.stringify(payload)
     })
 
     if (!response.ok) {
@@ -244,7 +261,18 @@ class ContextMeBackground {
       chrome.storage.local.get(['userProfile', 'authToken'], (result) => {
         if (result.authToken) {
           console.log('🔐 [ContextMe Background] Auth token found, fetching from cloud...')
-          this.fetchProfileFromCloud(result.authToken).then(resolve).catch(() => {
+          this.fetchProfileFromCloud(result.authToken).then((cloudProfile) => {
+            if (cloudProfile) {
+              // Save the fetched profile to localStorage
+              this.saveLocalProfile(cloudProfile).then(() => {
+                console.log('✅ [ContextMe Background] Cloud profile saved to localStorage')
+                resolve(cloudProfile)
+              })
+            } else {
+              console.log('📥 [ContextMe Background] No cloud profile found, using local:', result.userProfile ? 'exists' : 'not found')
+              resolve(result.userProfile || null)
+            }
+          }).catch(() => {
             console.log('📥 [ContextMe Background] Fallback to local profile:', result.userProfile ? 'exists' : 'not found')
             resolve(result.userProfile || null)
           })
@@ -317,6 +345,36 @@ class ContextMeBackground {
       }
     } catch (error) {
       console.error('❌ [ContextMe Background] Failed to fetch profile from cloud:', error)
+      throw error
+    }
+  }
+
+  async getCurrentUser() {
+    try {
+      const authToken = await this.getAuthToken()
+      if (!authToken) {
+        throw new Error('No auth token available')
+      }
+
+      const response = await fetch(`${this.apiBase}/extension/user`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      if (result.success) {
+        console.log('✅ [ContextMe Background] Current user fetched:', result.data)
+        return result.data
+      } else {
+        throw new Error(result.error || 'Failed to fetch current user')
+      }
+    } catch (error) {
+      console.error('❌ [ContextMe Background] Failed to fetch current user:', error)
       throw error
     }
   }

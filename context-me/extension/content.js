@@ -45,7 +45,10 @@ class ContextMeContent {
     if (this.shouldAnalyzePage()) {
       console.log('🔍 [ContextMe Content] Page should be analyzed, checking AI status...')
       if (this.aiEnabled) {
-        console.log('🤖 [ContextMe Content] AI is enabled, starting analysis...')
+        console.log('🤖 [ContextMe Content] AI is enabled, waiting for page to fully load...')
+        // 等待页面完全加载，避免标题为 "Loading" 的问题
+        await this.waitForPageLoad()
+        console.log('🤖 [ContextMe Content] Page loaded, starting analysis...')
         await this.analyzeCurrentPage()
       } else {
         console.log('⏸️ [ContextMe Content] AI is disabled, skipping analysis')
@@ -171,8 +174,16 @@ class ContextMeContent {
       console.log('📝 [ContextMe Content] Page content extracted:', {
         title: pageContent.title,
         url: pageContent.url,
-        contentLength: pageContent.content.length
+        sectionsCount: pageContent.sections.length,
+        contentLength: pageContent.fullContent.length
       })
+
+      // 验证内容是否有效
+      if (!pageContent.fullContent || pageContent.fullContent.length === 0) {
+        console.error('❌ [ContextMe Content] No content extracted from page')
+        this.showErrorIndicator('无法提取页面内容，请确保页面包含足够的文本内容')
+        return
+      }
 
       // 分析内容
       console.log('🧠 [ContextMe Content] Analyzing content...')
@@ -204,28 +215,80 @@ class ContextMeContent {
     const title = document.title
     const url = window.location.href
 
-    // 提取主要内容
-    let content = ''
+    // 提取分段的页面内容
+    const sections = this.extractContentSections()
+    const fullContent = sections.map(s => s.content).join('\n\n').substring(0, 8000)
 
-    // 尝试获取文章内容
-    const article = document.querySelector('article')
-    if (article) {
-      content = article.textContent || article.innerText
-    } else {
-      // 获取body内容，排除脚本和样式
-      const body = document.body.cloneNode(true)
-      const scripts = body.querySelectorAll('script, style, noscript')
-      scripts.forEach(el => el.remove())
-      content = body.textContent || body.innerText
-    }
-
-    // 清理内容
-    content = content.replace(/\s+/g, ' ').trim()
+    console.log('📄 [ContextMe Content] Page content extraction result:', {
+      title,
+      url,
+      sectionsCount: sections.length,
+      fullContentLength: fullContent.length,
+      hasContent: fullContent.length > 0
+    })
 
     return {
       url,
       title,
-      content: content.substring(0, 5000) // 限制长度
+      sections,
+      fullContent
+    }
+  }
+
+  extractContentSections() {
+    const sections = []
+
+    // 1. 尝试提取文章段落
+    const article = document.querySelector('article')
+    if (article) {
+      const paragraphs = article.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li')
+      paragraphs.forEach((el, index) => {
+        const content = (el.textContent || el.innerText).trim()
+        if (content.length > 50) { // 只保留有实质内容的段落
+          sections.push({
+            id: `section-${index}`,
+            type: el.tagName.toLowerCase(),
+            content: content,
+            element: el,
+            position: this.getElementPosition(el)
+          })
+        }
+      })
+    }
+
+    // 2. 如果没有文章，提取body中的主要内容区块
+    if (sections.length === 0) {
+      const contentElements = document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, div[class*="content"], div[class*="section"]')
+      contentElements.forEach((el, index) => {
+        const content = (el.textContent || el.innerText).trim()
+        if (content.length > 50 && content.length < 1000) { // 限制段落长度
+          sections.push({
+            id: `section-${index}`,
+            type: el.tagName.toLowerCase(),
+            content: content,
+            element: el,
+            position: this.getElementPosition(el)
+          })
+        }
+      })
+    }
+
+    // 3. 去重和清理
+    const uniqueSections = sections.filter((section, index, arr) => {
+      return arr.findIndex(s => s.content === section.content) === index
+    })
+
+    console.log(`📑 [ContextMe Content] Extracted ${uniqueSections.length} content sections`)
+    return uniqueSections.slice(0, 10) // 限制最多10个段落
+  }
+
+  getElementPosition(element) {
+    const rect = element.getBoundingClientRect()
+    return {
+      top: rect.top + window.scrollY,
+      left: rect.left + window.scrollX,
+      width: rect.width,
+      height: rect.height
     }
   }
 
@@ -271,12 +334,18 @@ class ContextMeContent {
 
       if (!userProfile.profileData) {
         console.log('⚠️ [ContextMe Content] User profile has no profile data, skipping insight generation')
+        console.log('📋 [ContextMe Content] Actual userProfile structure:', JSON.stringify(userProfile, null, 2))
         this.showErrorIndicator('用户档案数据不完整，请检查设置')
         return
       }
 
       if (!userProfile.profileData.interests || !userProfile.profileData.goals) {
         console.log('⚠️ [ContextMe Content] User profile missing interests or goals, skipping insight generation')
+        console.log('📋 [ContextMe Content] Profile details:', {
+          interests: userProfile.profileData.interests,
+          goals: userProfile.profileData.goals,
+          fullProfile: JSON.stringify(userProfile.profileData, null, 2)
+        })
         this.showErrorIndicator('请至少填写兴趣和目标信息')
         return
       }
@@ -306,9 +375,18 @@ class ContextMeContent {
         })
       })
 
-      // 显示洞察
-      console.log('🎨 [ContextMe Content] Displaying generated insight...')
-      this.displayInsight(insight, contentAnalysis)
+      // 处理新的结构化洞察响应
+      if (insight && insight.insights && Array.isArray(insight.insights)) {
+        console.log(`🎯 [ContextMe Content] Displaying ${insight.insights.length} structured insights`)
+        this.displayStructuredInsights(insight.insights, contentAnalysis)
+      } else if (insight) {
+        // 回退到单一洞察显示
+        console.log('⚠️ [ContextMe Content] Using fallback single insight display')
+        this.displayInsight(insight, contentAnalysis)
+      } else {
+        console.error('❌ [ContextMe Content] No insight data received')
+        this.showErrorIndicator('未收到洞察数据，请稍后重试')
+      }
       console.log('✅ [ContextMe Content] Insight generation process completed')
 
     } catch (error) {
@@ -380,6 +458,104 @@ class ContextMeContent {
     // 更新统计
     this.updateUsageStats()
     console.log('📊 [ContextMe Content] Usage stats updated')
+  }
+
+  displayStructuredInsights(insights, contentAnalysis) {
+    console.log('🎯 [ContextMe Content] Displaying structured insights:', insights.length)
+
+    // 清除旧的洞察容器
+    if (this.insightsContainer) {
+      this.insightsContainer.remove()
+      this.insightsContainer = null
+    }
+
+    insights.forEach((insight, index) => {
+      if (insight.sectionId && contentAnalysis.sections) {
+        // 找到对应的页面元素
+        const targetSection = contentAnalysis.sections.find(s => s.id === insight.sectionId)
+        if (targetSection && targetSection.element) {
+          this.createInlineInsight(insight, targetSection.element)
+        } else {
+          // 如果找不到对应元素，回退到右上角容器
+          this.createFloatingInsight(insight, index)
+        }
+      } else {
+        // 如果没有sectionId，使用浮动容器
+        this.createFloatingInsight(insight, index)
+      }
+    })
+
+    console.log('✅ [ContextMe Content] All structured insights displayed')
+  }
+
+  createInlineInsight(insight, targetElement) {
+    console.log(`📍 [ContextMe Content] Creating inline insight for ${insight.sectionId}`)
+
+    const insightContainer = document.createElement('div')
+    insightContainer.className = 'contextme-inline-insight'
+    insightContainer.style.cssText = `
+      margin: 8px 0;
+      padding: 12px;
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-left: 4px solid #0ea5e9;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.5;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      animation: slideIn 0.3s ease-out;
+    `
+
+    const relevanceColor = this.getRelevanceColor(insight.relevanceScore)
+    const categoryIcon = this.getCategoryIcon(insight.category)
+
+    insightContainer.innerHTML = `
+      <div style="display: flex; align-items: flex-start; gap: 8px;">
+        <span style="font-size: 16px; margin-top: 2px;">${categoryIcon}</span>
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+            <span style="font-weight: 600; color: #1f2937; font-size: 12px;">ContextMe 洞察</span>
+            <span style="background: ${relevanceColor}; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 500;">
+              ${Math.round(insight.relevanceScore * 100)}% 相关
+            </span>
+          </div>
+          <div style="color: #374151; margin-bottom: 8px;">
+            ${insight.insight}
+          </div>
+          ${insight.actionItems && insight.actionItems.length > 0 ? `
+            <div style="margin-top: 8px;">
+              <div style="font-weight: 500; color: #1f2937; font-size: 12px; margin-bottom: 4px;">建议行动：</div>
+              <ul style="margin: 0; padding-left: 16px; color: #4b5563; font-size: 12px;">
+                ${insight.actionItems.map(item => `<li style="margin-bottom: 2px;">${item}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `
+
+    // 添加CSS动画
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes slideIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `
+    document.head.appendChild(style)
+
+    // 插入洞察到目标元素后面
+    targetElement.parentNode.insertBefore(insightContainer, targetElement.nextSibling)
+
+    console.log(`✅ [ContextMe Content] Inline insight created for ${insight.sectionId}`)
+  }
+
+  createFloatingInsight(insight, index) {
+    if (!this.insightsContainer) {
+      this.createInsightsContainer()
+    }
+
+    const insightElement = this.createInsightElement(insight, null)
+    this.insightsContainer.appendChild(insightElement)
   }
 
   showErrorIndicator(errorMessage) {
@@ -773,6 +949,50 @@ class ContextMeContent {
     }
 
     console.log('✅ [ContextMe Content] Mock AI UI removed')
+  }
+
+  async waitForPageLoad() {
+    return new Promise((resolve) => {
+      const checkPageReady = () => {
+        // 检查页面是否已经完全加载
+        const title = document.title
+        const hasContent = document.body.textContent.trim().length > 100
+
+        // 如果标题不是 "Loading" 且有足够内容，则认为页面已加载完成
+        if (title !== 'Loading' && hasContent) {
+          console.log('📄 [ContextMe Content] Page is ready for analysis')
+          resolve()
+        } else {
+          // 继续等待，最多等待10秒
+          setTimeout(checkPageReady, 500)
+        }
+      }
+
+      // 设置超时，最多等待10秒
+      const timeout = setTimeout(() => {
+        console.log('⏰ [ContextMe Content] Page load timeout, proceeding with analysis')
+        resolve()
+      }, 10000)
+
+      // 开始检查
+      checkPageReady()
+
+      // 监听页面变化
+      const observer = new MutationObserver(() => {
+        if (document.title !== 'Loading') {
+          clearTimeout(timeout)
+          observer.disconnect()
+          setTimeout(checkPageReady, 1000) // 额外等待1秒确保内容稳定
+        }
+      })
+
+      observer.observe(document, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true
+      })
+    })
   }
 }
 

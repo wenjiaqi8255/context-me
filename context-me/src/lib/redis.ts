@@ -62,4 +62,16 @@ export class CacheService {
       return 0
     }
   }
+
+  // 重置使用限制（用于开发调试）
+  async resetUsageLimit(userId: string): Promise<void> {
+    try {
+      const today = new Date().toDateString()
+      const usageKey = `usage:${userId}:${today}`
+      await this.redis.del(usageKey)
+      console.log(`[Cache] Usage limit reset for user ${userId}`)
+    } catch (error) {
+      console.error('Redis reset usage limit error:', error)
+    }
+  }
 }

@@ -20,12 +20,24 @@ export interface ProfileData {
   }
 }
 
+export interface ContentSection {
+  id: string
+  type: string
+  content: string
+  element?: any
+  position?: {
+    top: number
+    left: number
+  }
+}
+
 export interface ContentAnalysis {
   id?: string
   contentHash: string
   url?: string
   title?: string
   contentType: 'course' | 'job' | 'product' | 'article' | 'other'
+  sections?: ContentSection[]
   extractedData: {
     summary?: string
     keyPoints?: string[]
@@ -39,9 +51,12 @@ export interface Insight {
   id: string
   userId: string
   contentHash: string
+  sectionId?: string
+  sectionType?: string
   insight: string
   relevanceScore: number
   category: 'opportunity' | 'recommendation' | 'warning' | 'information'
+  actionItems?: string[]
   createdAt: Date
 }
 

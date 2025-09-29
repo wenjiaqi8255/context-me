@@ -9,9 +9,11 @@ const cacheService = new CacheService()
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log('📥 [API] Content analysis request body:', body)
     const { url, title, content } = body
 
     if (!url || !content) {
+      console.log('❌ [API] Validation failed:', { url: !!url, content: !!content, bodyKeys: Object.keys(body) })
       return NextResponse.json<ApiResponse>({
         success: false,
         error: 'URL and content are required'
