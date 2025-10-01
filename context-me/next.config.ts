@@ -23,15 +23,16 @@ const nextConfig: NextConfig = {
   // 禁用某些功能以减少包大小
   experimental: {
     optimizePackageImports: ['react-icons', "lucide-react"],
-    serverComponentsExternalPackages: [
-      '@prisma/client',
-      'googleapis',
-      'google-auth-library',
-      '@upstash/redis'
-    ],
-    // 启用更激进的优化
     optimizeCss: true,
   },
+
+  // 服务器组件外部包 (正确的位置)
+  serverExternalPackages: [
+    '@prisma/client',
+    'googleapis',
+    'google-auth-library',
+    '@upstash/redis'
+  ],
 
   // 重定向配置
   async redirects() {
@@ -108,7 +109,7 @@ const nextConfig: NextConfig = {
       // 服务端优化：排除不必要的模块
       config.externals = [
         ...(config.externals || []),
-        ({ request }, callback) => {
+        ({ request }: { request: string }, callback: (error?: Error | null, result?: string) => void) => {
           // 排除开发依赖
           const devDependencies = [
             'eslint',
