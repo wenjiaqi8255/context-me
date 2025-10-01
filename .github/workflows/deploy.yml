@@ -1,0 +1,147 @@
+name: Deploy ContextMe to EdgeOne
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # 构建和测试 Next.js 后端
+  build-backend:
+    name: Build Next.js Backend
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: context-me/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./context-me
+      run: npm ci
+
+    - name: Run type check
+      working-directory: ./context-me
+      run: npm run build
+
+    - name: Generate Prisma client
+      working-directory: ./context-me
+      run: npx prisma generate
+
+    - name: Build Next.js application
+      working-directory: ./context-me
+      run: npm run build
+      env:
+        # 使用生产环境配置
+        NODE_ENV: production
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+        UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+        NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+        NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        OPENAI_URL: ${{ secrets.OPENAI_URL }}
+        STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nextjs-build
+        path: context-me/.next/
+        retention-days: 1
+
+    - name: Upload public assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: nextjs-public
+        path: context-me/public/
+        retention-days: 1
+
+  # 部署到 EdgeOne (需要手动配置或在控制台操作)
+  deploy-to-edgeone:
+    name: Deploy to EdgeOne
+    needs: build-backend
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: nextjs-build
+        path: .next/
+
+    - name: Download public assets
+      uses: actions/download-artifact@v4
+      with:
+        name: nextjs-public
+        path: public/
+
+    - name: Package for deployment
+      run: |
+        # 创建部署包
+        mkdir -p deploy/package
+        cp -r .next deploy/package/
+        cp -r public deploy/package/
+        cp context-me/package.json deploy/package/
+        cp context-me/next.config.ts deploy/package/
+
+        # 创建启动脚本
+        cat > deploy/package/start.js << 'EOF'
+        const { createServer } = require('http')
+        const { parse } = require('url')
+        const next = require('next')
+
+        const dev = process.env.NODE_ENV !== 'production'
+        const app = next({ dev })
+        const handle = app.getRequestHandler()
+
+        app.prepare().then(() => {
+          createServer((req, res) => {
+            const parsedUrl = parse(req.url, true)
+            handle(req, res, parsedUrl)
+          }).listen(3000, () => {
+            console.log('> Ready on http://localhost:3000')
+          })
+        })
+        EOF
+
+        # 压缩部署包
+        cd deploy
+        tar -czf contextme-backend.tar.gz package/
+
+    - name: Upload deployment package
+      uses: actions/upload-artifact@v4
+      with:
+        name: edgeone-deployment
+        path: deploy/contextme-backend.tar.gz
+
+    - name: Display deployment info
+      run: |
+        echo "🚀 ContextMe Next.js Backend 已准备好部署到 EdgeOne"
+        echo ""
+        echo "📦 部署包: contextme-backend.tar.gz"
+        echo "🌐 部署域名: https://context-me.edgeone.run"
+        echo ""
+        echo "📋 下一步操作:"
+        echo "1. 下载部署包"
+        echo "2. 登录 EdgeOne 控制台"
+        echo "3. 上传到静态网站或函数计算服务"
+        echo "4. 配置环境变量"
+        echo "5. 设置自定义域名"
+        echo ""
+        echo "🔧 或者使用 EdgeOne CLI 自动部署:"
+        echo "edgeone deploy --package contextme-backend.tar.gz"
