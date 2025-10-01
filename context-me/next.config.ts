@@ -23,7 +23,8 @@ const nextConfig: NextConfig = {
   // 禁用某些功能以减少包大小
   experimental: {
     optimizePackageImports: ['react-icons', "lucide-react"],
-    optimizeCss: true,
+    // 暂时禁用 optimizeCss，因为缺少 critters 依赖
+    // optimizeCss: true,
   },
 
   // 服务器组件外部包 (正确的位置)
