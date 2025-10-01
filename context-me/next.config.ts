@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 输出配置
+  // 输出配置 - standalone 模式，但优化包大小
   output: 'standalone',
 
   // 环境变量配置
@@ -14,7 +14,23 @@ const nextConfig: NextConfig = {
   // 图片配置
   images: {
     domains: ['lh3.googleusercontent.com', 'avatars.githubusercontent.com'],
-    unoptimized: true, // EdgeOne 可能需要这个配置
+    unoptimized: true, // EdgeOne 静态托管需要这个配置
+  },
+
+  // 基础路径配置
+  basePath: '',
+
+  // 禁用某些功能以减少包大小
+  experimental: {
+    optimizePackageImports: ['react-icons', "lucide-react"],
+    serverComponentsExternalPackages: [
+      '@prisma/client',
+      'googleapis',
+      'google-auth-library',
+      '@upstash/redis'
+    ],
+    // 启用更激进的优化
+    optimizeCss: true,
   },
 
   // 重定向配置
@@ -51,8 +67,34 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Webpack 配置
-  webpack: (config, { isServer }) => {
+  // Webpack 配置优化
+  webpack: (config, { isServer, dev }) => {
+    // 生产环境优化
+    if (!dev) {
+      // 减少包大小
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          minSize: 20000,
+          maxSize: 244000,
+          cacheGroups: {
+            default: {
+              minChunks: 2,
+              priority: -20,
+              reuseExistingChunk: true,
+            },
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              priority: -10,
+              chunks: 'all',
+            },
+          },
+        },
+      };
+    }
+
     if (!isServer) {
       // 客户端打包优化
       config.resolve.fallback = {
@@ -60,15 +102,37 @@ const nextConfig: NextConfig = {
         fs: false,
         net: false,
         tls: false,
+        child_process: false,
       };
+    } else {
+      // 服务端优化：排除不必要的模块
+      config.externals = [
+        ...(config.externals || []),
+        ({ request }, callback) => {
+          // 排除开发依赖
+          const devDependencies = [
+            'eslint',
+            '@types',
+            'tailwindcss',
+            'autoprefixer',
+            'postcss'
+          ];
+
+          if (devDependencies.some(dep => request.includes(dep))) {
+            return callback(null, `commonjs ${request}`);
+          }
+          callback();
+        },
+      ];
     }
+
     return config;
   },
 
-  // Turbopack 根目录配置
-  turbopack: {
-    root: __dirname,
-  },
+  // 移除 Turbopack 以减少包大小
+  // turbopack: {
+  //   root: __dirname,
+  // },
 };
 
 export default nextConfig;
