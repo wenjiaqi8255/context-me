@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -81,11 +82,21 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold text-gray-900">ContextMe</h1>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <img
-                  src={session.user.avatar || "/default-avatar.png"}
-                  alt={session.user.name || "User"}
-                  className="w-8 h-8 rounded-full"
-                />
+                {session.user.avatar ? (
+                  <Image
+                    src={session.user.avatar}
+                    alt={session.user.name || "User"}
+                    width={32}
+                    height={32}
+                    className="rounded-full"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                    <span className="text-gray-600 text-sm font-medium">
+                      {(session.user.name || session.user.email || "U").charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
                 <span className="text-sm font-medium text-gray-700">
                   {session.user.name || session.user.email}
                 </span>
