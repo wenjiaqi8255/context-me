@@ -61,6 +61,12 @@ check_dependencies() {
 check_env_vars() {
     log_info "检查环境变量..."
 
+    # 先加载 .env 文件
+    if [[ -f ".env" ]]; then
+        log_info "加载 .env 文件..."
+        export $(grep -v '^#' .env | xargs)
+    fi
+
     local required_vars=(
         "DATABASE_URL"
         "UPSTASH_REDIS_REST_URL"
