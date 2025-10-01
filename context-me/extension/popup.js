@@ -94,7 +94,7 @@ class ContextMePopup {
   async checkConnection() {
     try {
       const port = await this.getApiPort()
-      const response = await fetch(`http://localhost:${port}/api/health`)
+      const response = await fetch(`https://context-me.edgeone.run/api/health`)
       if (response.ok) {
         document.getElementById('connectionStatus').textContent = '已连接'
         document.getElementById('connectionStatus').style.color = '#10b981'

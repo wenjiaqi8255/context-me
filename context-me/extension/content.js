@@ -1,7 +1,7 @@
 // ContextMe Content Script
 class ContextMeContent {
   constructor() {
-    this.apiBase = 'http://localhost:3000/api'
+    this.apiBase = 'https://context-me.edgeone.run/api'
     this.insightsContainer = null
     this.currentInsights = []
     this.isProcessing = false

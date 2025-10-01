@@ -2,7 +2,7 @@
 class ContextMeBackground {
   constructor() {
     this.apiPort = 3001 // 默认端口，可以通过配置修改
-    this.apiBase = `http://localhost:${this.apiPort}/api`
+    this.apiBase = `https://context-me.edgeone.run/api`
     this.aiEnabled = false // AI功能默认关闭
     this.mockAIEnabled = false // Mock AI功能默认关闭
     console.log('🚀 [ContextMe Background] Initializing background service...')
@@ -104,7 +104,7 @@ class ContextMeBackground {
 
         case 'SET_API_PORT':
           this.apiPort = data.port || 3000
-          this.apiBase = `http://localhost:${this.apiPort}/api`
+          this.apiBase = `https://context-me.edgeone.run/api`
           await this.savePortToStorage(this.apiPort)
           console.log('API port updated to:', this.apiPort, 'API base:', this.apiBase)
           sendResponse({ success: true, data: { port: this.apiPort, apiBase: this.apiBase } })
@@ -461,7 +461,7 @@ class ContextMeBackground {
       chrome.storage.local.get(['apiPort'], (result) => {
         if (result.apiPort) {
           this.apiPort = result.apiPort
-          this.apiBase = `http://localhost:${this.apiPort}/api`
+          this.apiBase = `https://context-me.edgeone.run/api`
           console.log('🔌 [ContextMe Background] Port loaded from storage:', this.apiPort)
         }
         resolve()

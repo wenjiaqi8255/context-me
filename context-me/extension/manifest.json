@@ -11,7 +11,8 @@
   ],
   "host_permissions": [
     "http://localhost:*/*",
-    "https://*/*"
+    "https://*/*",
+    "https://context-me.edgeone.run/*"
   ],
     "background": {
     "service_worker": "background.js",

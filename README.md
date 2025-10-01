@@ -238,6 +238,31 @@ npm run lint         # 代码检查
    edgeone-cli deploy --config edgeone.config.js
    ```
 
+5. **CI/CD 自动部署（推荐）**
+   ```bash
+   # 代码推送到 GitHub
+   git add .
+   git commit -m "Deploy to EdgeOne"
+   git push origin master
+
+   # GitHub Actions 会自动构建和部署
+   ```
+
+#### 🎉 当前部署状态
+✅ **已成功部署到 EdgeOne**
+- **生产环境地址**: https://context-me.edgeone.run
+- **部署状态**: 所有功能正常运行
+- **Chrome Extension**: 已更新为生产配置
+
+#### 📋 部署后测试
+部署完成后，请参考 [EDGEONE_DEPLOYMENT_GUIDE.md](./context-me/EDGEONE_DEPLOYMENT_GUIDE.md) 进行完整测试：
+- 🌐 网站功能测试（登录、Dashboard）
+- 🔗 API 端点验证（健康检查、用户资料）
+- 🧩 Chrome Extension 集成测试（重新加载扩展后）
+- 🔐 认证流程测试（Google OAuth）
+
+**重要提醒**: Chrome Extension 已更新为生产环境配置，请重新加载扩展以应用新设置。
+
 ## 🔍 Chrome 扩展使用
 
 ### 安装后设置
