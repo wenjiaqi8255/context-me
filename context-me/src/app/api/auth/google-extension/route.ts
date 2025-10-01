@@ -30,17 +30,17 @@ export async function POST(request: NextRequest) {
 
       // 查找或创建用户
       let user = await prisma.user.findUnique({
-        where: { email: userInfo.email }
+        where: { email: userInfo.email || undefined }
       })
 
       if (!user) {
         console.log('👤 [Auth] Creating new user...')
         user = await prisma.user.create({
           data: {
-            email: userInfo.email,
-            name: userInfo.name,
-            avatar: userInfo.picture,
-            googleId: userInfo.id,
+            email: userInfo.email || '',
+            name: userInfo.name || undefined,
+            avatar: userInfo.picture || undefined,
+            googleId: userInfo.id || undefined,
             isActive: true,
             lastLoginAt: new Date(),
           }
@@ -49,11 +49,11 @@ export async function POST(request: NextRequest) {
       } else {
         console.log('👤 [Auth] Updating existing user...')
         user = await prisma.user.update({
-          where: { email: userInfo.email },
+          where: { email: userInfo.email || undefined },
           data: {
-            name: userInfo.name,
-            avatar: userInfo.picture,
-            googleId: userInfo.id,
+            name: userInfo.name || undefined,
+            avatar: userInfo.picture || undefined,
+            googleId: userInfo.id || undefined,
             lastLoginAt: new Date(),
           }
         })

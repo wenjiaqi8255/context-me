@@ -19,7 +19,7 @@ export async function validateExtensionToken(request: NextRequest): Promise<Exte
 
     const token = authHeader.substring(7)
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; type: string; email: string }
 
     if (decoded.type !== 'extension') {
       return null

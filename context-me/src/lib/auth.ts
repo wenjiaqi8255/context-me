@@ -29,6 +29,7 @@ export const authOptions: NextAuthOptions = {
       }
       if (user) {
         token.id = user.id
+        token.picture = user.image || undefined
       }
       return token
     },
@@ -36,6 +37,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string
         session.accessToken = token.accessToken as string
+        session.user.avatar = token.picture as string | undefined
       }
       return session
     },

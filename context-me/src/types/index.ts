@@ -24,7 +24,7 @@ export interface ContentSection {
   id: string
   type: string
   content: string
-  element?: any
+  element?: HTMLElement
   position?: {
     top: number
     left: number
@@ -93,11 +93,11 @@ export interface UsageLog {
   contentHash?: string
   tokensUsed?: number
   costCents?: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   createdAt: Date
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string

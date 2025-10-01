@@ -48,7 +48,7 @@ export class AIService {
     userProfile: UserProfile,
     contentAnalysis: ContentAnalysis,
     systemPrompt?: string
-  ): Promise<{ content: string; usage?: any; parsedInsights?: ParsedInsights }> {
+  ): Promise<{ content: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }; parsedInsights?: ParsedInsights }> {
     const prompt = this.buildInsightPrompt(userProfile, contentAnalysis)
 
     const request: AIRequest = {
